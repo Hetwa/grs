@@ -8,6 +8,7 @@ docopt
 rasterio
 numba
 h5py
+netCDF4
 numpy
 pandas>=2.0.3
 pyproj
