@@ -144,9 +144,13 @@ class CamsProduct:
             self.cams_download()
 
         # lazy loading
-        cams = xr.open_dataset(self.filepath,
-                               decode_cf=True,
-                               )
+        cams = xr.open_dataset(self.filepath, decode_cf=False)
+
+        
+        for var in cams.variables:
+            cams[var].attrs.pop("dtype", None)
+
+        cams = xr.decode_cf(cams)
 
         if ('forecast_period' in cams.dims) & ('forecast_reference_time' in cams.dims):
             cams = cams.stack(time_buffer=['forecast_period', 'forecast_reference_time']).swap_dims(
