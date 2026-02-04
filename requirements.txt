@@ -2,7 +2,7 @@
 importlib_resources
 
 cdsapi>=0.6.1
-git+https://github.com/Hetwa/GRSdriver.git@master#egg=GRSdriver
+GRSdriver
 xmltodict
 docopt
 rasterio
