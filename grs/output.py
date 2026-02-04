@@ -14,7 +14,7 @@ configfile = importlib_resources.files(__package__) / 'config.yml'
 with open(configfile, 'r') as file:
     config = yaml.safe_load(file)
 
-NETCDF_ENGINE = 'netcdf4' #config['processor']['netcdf_engine']
+NETCDF_ENGINE = config['processor']['netcdf_engine']
 
 
 class L2aProduct():

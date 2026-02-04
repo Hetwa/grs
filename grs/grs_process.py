@@ -29,7 +29,7 @@ with open(configfile, 'r') as file:
 GRSDATA = config['path']['grsdata']
 TOALUT = config['path']['toa_lut']
 TRANSLUT = config['path']['trans_lut']
-CAMS_PATH = config['path']['trans_lut']
+CAMS_PATH = config['path']['cams']
 NCPU = config['processor']['ncpu']
 NETCDF_ENGINE = config['processor']['netcdf_engine']
 
