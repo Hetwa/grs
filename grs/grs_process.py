@@ -458,7 +458,7 @@ class Process:
         # _aot = aot_lut.interp(aot_ref=_aot_ref)
         if dem_file:
             logging.info('compute surface pressure from dem')
-            dem = xr.open_dataset(dem_file).squeeze().interp(y=prod.raster.y,
+            dem = xr.open_dataset(dem_file, engine=NETCDF_ENGINE).squeeze().interp(y=prod.raster.y,
                                                              x=prod.raster.x,
                                                              method='nearest')
             dem = dem.rename_vars({'band_data': 'dem'})

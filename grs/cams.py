@@ -10,13 +10,24 @@ from scipy.interpolate import interp1d
 import xarray as xr
 
 import matplotlib.pyplot as plt
-
+import importlib_resources
+import yaml
 import logging
 import calendar, datetime
 import cdsapi
 
 opj = os.path.join
 
+configfile = importlib_resources.files(__package__) / 'config.yml'
+with open(configfile, 'r') as file:
+    config = yaml.safe_load(file)
+
+GRSDATA = config['path']['grsdata']
+TOALUT = config['path']['toa_lut']
+TRANSLUT = config['path']['trans_lut']
+CAMS_PATH = config['path']['cams']
+NCPU = config['processor']['ncpu']
+NETCDF_ENGINE = config['processor']['netcdf_engine']
 
 class CamsProduct:
     '''
@@ -144,7 +155,7 @@ class CamsProduct:
             self.cams_download()
 
         # lazy loading
-        cams = xr.open_dataset(self.filepath, decode_cf=False)
+        cams = xr.open_dataset(self.filepath, decode_cf=False,engine=NETCDF_ENGINE)
 
         
         for var in cams.variables:

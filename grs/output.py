@@ -7,14 +7,14 @@ import xarray as xr
 import logging
 
 
-import importlib_resources
-import yaml
+# import importlib_resources
+# import yaml
 
-configfile = importlib_resources.files(__package__) / 'config.yml'
-with open(configfile, 'r') as file:
-    config = yaml.safe_load(file)
+# configfile = importlib_resources.files(__package__) / 'config.yml'
+# with open(configfile, 'r') as file:
+#     config = yaml.safe_load(file)
 
-NETCDF_ENGINE = config['processor']['netcdf_engine']
+# NETCDF_ENGINE = 'netcdf4' #config['processor']['netcdf_engine']
 
 
 class L2aProduct():
@@ -189,7 +189,7 @@ class L2aProduct():
                 del self.l2_prod[var].attrs['grid_mapping']
 
         self.l2_prod.to_netcdf(ofile + '.nc',
-                               encoding=encoding, engine=NETCDF_ENGINE)
+                               encoding=encoding, engine='netcdf4' )
 
         # self.l2_prod.close()
 
@@ -200,7 +200,7 @@ class L2aProduct():
 
         self.ancillary.to_netcdf(ofile + '_anc.nc', 'w',
                                  encoding=encoding,
-                                 engine=NETCDF_ENGINE)  # ,group='ancillary')
+                                 engine='netcdf4')  # ,group='ancillary')
 
         # self.ancillary.close()
 
