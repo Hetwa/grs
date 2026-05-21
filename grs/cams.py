@@ -1,36 +1,32 @@
-'''
+"""
 Module dedicated to handle CAMS data with link to Copernicus API.
-'''
+"""
 
-import os, sys
+import os
 
-import numpy as np
-import pandas
-from scipy.interpolate import interp1d
-import xarray as xr
-
-import matplotlib.pyplot as plt
-import importlib_resources
-import yaml
-import logging
-import calendar, datetime
 import cdsapi
+import importlib_resources
+import matplotlib.pyplot as plt
+import numpy as np
+import xarray as xr
+import yaml
 
 opj = os.path.join
 
-configfile = importlib_resources.files(__package__) / 'config.yml'
-with open(configfile, 'r') as file:
+configfile = importlib_resources.files(__package__) / "config.yml"
+with open(configfile, "r") as file:
     config = yaml.safe_load(file)
 
-GRSDATA = config['path']['grsdata']
-TOALUT = config['path']['toa_lut']
-TRANSLUT = config['path']['trans_lut']
-CAMS_PATH = config['path']['cams']
-NCPU = config['processor']['ncpu']
-NETCDF_ENGINE = config['processor']['netcdf_engine']
+GRSDATA = config["path"]["grsdata"]
+TOALUT = config["path"]["toa_lut"]
+TRANSLUT = config["path"]["trans_lut"]
+CAMS_PATH = config["path"]["cams"]
+NCPU = config["processor"]["ncpu"]
+NETCDF_ENGINE = config["processor"]["netcdf_engine"]
+
 
 class CamsProduct:
-    '''
+    """
     Unit Conversion:
 
     - PWC (Precipitable Water Content), Grib Unit [kg/m^2]
@@ -54,54 +50,55 @@ class CamsProduct:
     pressure (Pa = 1/100 hPa)
     water vapor (kg/m^2 = 10^3/10^4 = 0.1 g/cm^2)
 
-    '''
+    """
 
-    def __init__(self, prod,
-                 cams_file=None,
-                 dir='./',
-                 type='forecast',
-                 suffix=''
-                 ):
-        '''
+    def __init__(self, prod, cams_file=None, dir="./", type="forecast", suffix=""):
+        """
 
         :param prod: l1c product from module product.prod
         :param cams_file:
         :param dir:
         :param type:
         :param suffix:
-        '''
+        """
 
         self.prod = prod
         self.date = prod.time
-        self.date_day = prod.time.dt.strftime('%Y-%m-%d').values
+        self.date_day = prod.time.dt.strftime("%Y-%m-%d").values
         self.date_str = str(self.date_day)
         self.type = type
         self.wls = [469, 550, 670, 865, 1240]
 
-        self.lonmin, self.latmin, self.lonmax, self.latmax = prod.rio.transform_bounds(4326)
-        self.area = [self.latmax + 1,
-                     self.lonmin - 1,
-                     self.latmin - 1,
-                     self.lonmax + 1]
+        self.lonmin, self.latmin, self.lonmax, self.latmax = prod.rio.transform_bounds(
+            4326
+        )
+        self.area = [self.latmax + 1, self.lonmin - 1, self.latmin - 1, self.lonmax + 1]
 
         self.variable = [
-            '10m_u_component_of_wind', '10m_v_component_of_wind',
-            '2m_temperature',
-            'mean_sea_level_pressure', 'surface_pressure',
-            'ammonium_aerosol_optical_depth_550nm', 'black_carbon_aerosol_optical_depth_550nm',
-            'dust_aerosol_optical_depth_550nm',
-            'nitrate_aerosol_optical_depth_550nm', 'organic_matter_aerosol_optical_depth_550nm',
-            'sea_salt_aerosol_optical_depth_550nm',
-            'secondary_organic_aerosol_optical_depth_550nm', 'sulphate_aerosol_optical_depth_550nm',
-            'total_aerosol_optical_depth_1240nm',
-            'total_aerosol_optical_depth_469nm',
-            'total_aerosol_optical_depth_550nm',
-            'total_aerosol_optical_depth_670nm',
-            'total_aerosol_optical_depth_865nm',
-            'total_column_carbon_monoxide',
-            'total_column_methane',
-            'total_column_nitrogen_dioxide',
-            'total_column_ozone', 'total_column_water_vapour']
+            "10m_u_component_of_wind",
+            "10m_v_component_of_wind",
+            "2m_temperature",
+            "mean_sea_level_pressure",
+            "surface_pressure",
+            "ammonium_aerosol_optical_depth_550nm",
+            "black_carbon_aerosol_optical_depth_550nm",
+            "dust_aerosol_optical_depth_550nm",
+            "nitrate_aerosol_optical_depth_550nm",
+            "organic_matter_aerosol_optical_depth_550nm",
+            "sea_salt_aerosol_optical_depth_550nm",
+            "secondary_organic_aerosol_optical_depth_550nm",
+            "sulphate_aerosol_optical_depth_550nm",
+            "total_aerosol_optical_depth_1240nm",
+            "total_aerosol_optical_depth_469nm",
+            "total_aerosol_optical_depth_550nm",
+            "total_aerosol_optical_depth_670nm",
+            "total_aerosol_optical_depth_865nm",
+            "total_column_carbon_monoxide",
+            "total_column_methane",
+            "total_column_nitrogen_dioxide",
+            "total_column_ozone",
+            "total_column_water_vapour",
+        ]
 
         if cams_file:
             self.file = os.path.basename(cams_file)
@@ -111,62 +108,69 @@ class CamsProduct:
             self.dir = dir
             if not os.path.exists(dir):
                 os.makedirs(dir)
-            self.file = self.date_str + '-' + type + suffix + '.nc'
+            self.file = self.date_str + "-" + type + suffix + ".nc"
             self.filepath = opj(self.dir, self.file)
 
     def cams_download(self):
-        '''
+        """
         Autodownload from CAMS api of the cams netcdf data for the region-of-interest of the input image.
 
         :return:
-        '''
+        """
 
         c = cdsapi.Client()
 
         c.retrieve(
-            'cams-global-atmospheric-composition-forecasts',
+            "cams-global-atmospheric-composition-forecasts",
             {
-                'date': self.date_str + '/' + self.date_str,
-                'type': self.type,
-                'format': 'netcdf'
-                ,
-                'variable': self.variable,
-                'time': ['00:00', '12:00'],
-                'leadtime_hour': ['0', '3', '6', '9'],
-                'area': self.area,
+                "date": self.date_str + "/" + self.date_str,
+                "type": self.type,
+                "format": "netcdf",
+                "variable": self.variable,
+                "time": ["00:00", "12:00"],
+                "leadtime_hour": ["0", "3", "6", "9"],
+                "area": self.area,
             },
-            self.filepath)
+            self.filepath,
+        )
 
         return
 
-    def load(self,
-             daily_stats=False):
-        '''
+    def load(self, daily_stats=False):
+        """
         Lazy loading and then resmapling of the CAMS data for the region and date of interest.
 
         :return:
-        '''
+        """
 
         # set geographic extents
         xmin, ymin, xmax, ymax = self.prod.rio.bounds()
-        lonmin, latmin, lonmax, latmax = self.lonmin, self.latmin, self.lonmax, self.latmax
+        lonmin, latmin, lonmax, latmax = (
+            self.lonmin,
+            self.latmin,
+            self.lonmax,
+            self.latmax,
+        )
 
         if not os.path.exists(self.filepath):
             self.cams_download()
 
         # lazy loading
-        cams = xr.open_dataset(self.filepath, decode_cf=False,engine=NETCDF_ENGINE)
+        cams = xr.open_dataset(self.filepath, decode_cf=False, engine=NETCDF_ENGINE)
 
-        
         for var in cams.variables:
             cams[var].attrs.pop("dtype", None)
 
         cams = xr.decode_cf(cams)
 
-        if ('forecast_period' in cams.dims) & ('forecast_reference_time' in cams.dims):
-            cams = cams.stack(time_buffer=['forecast_period', 'forecast_reference_time']).swap_dims(
-                {'time_buffer': 'valid_time'}).sortby('valid_time').rename(
-                {'valid_time': 'time'}).drop_vars(['time_buffer'])
+        if ("forecast_period" in cams.dims) & ("forecast_reference_time" in cams.dims):
+            cams = (
+                cams.stack(time_buffer=["forecast_period", "forecast_reference_time"])
+                .swap_dims({"time_buffer": "valid_time"})
+                .sortby("valid_time")
+                .rename({"valid_time": "time"})
+                .drop_vars(["time_buffer"])
+            )
 
         cams = cams.sel(time=self.date_day)
 
@@ -177,30 +181,36 @@ class CamsProduct:
         # check if image is on Greenwich meridian and adapt longitude convention
         if cams.longitude.min() >= 0:
             if lonmin <= 0 and lonmax >= 0:
-
-                cams = cams.assign_coords({"longitude": (((cams.longitude + 180) % 360) - 180)}).sortby('longitude')
+                cams = cams.assign_coords(
+                    {"longitude": (((cams.longitude + 180) % 360) - 180)}
+                ).sortby("longitude")
             else:
                 # set longitude between 0 and 360 deg
-                lonmin, lonmax, = lonmin % 360, lonmax % 360
+                (
+                    lonmin,
+                    lonmax,
+                ) = lonmin % 360, lonmax % 360
 
         # slicing
         cams = cams.sel(longitude=slice(lonmin - 1, lonmax + 1)).load()
 
         if cams.u10.shape[0] == 0 or cams.u10.shape[1] == 0:
-            print('no cams data, enlarge subset')
+            print("no cams data, enlarge subset")
 
         # -------------------------
         # temporal extraction
         # -------------------------
         if daily_stats:
-            cams = cams.mean('time')
+            cams = cams.mean("time")
         else:
-            if (cams.time.values[0] < self.date.values) & (cams.time.values[-1] > self.date.values):
+            if (cams.time.values[0] < self.date.values) & (
+                cams.time.values[-1] > self.date.values
+            ):
                 # if date within cams time range proceed to temporal interpolation
                 cams = cams.interp(time=self.date)
             else:
                 # otherwise get the nearest date
-                cams = cams.sel(time=self.date, method='nearest')
+                cams = cams.sel(time=self.date, method="nearest")
 
         # rename "time" variable to avoid conflicts
         # cams = cams.rename({'time':'time_cams'})
@@ -208,27 +218,29 @@ class CamsProduct:
         # -------------------------
         # spatial interpolation
         # -------------------------
-        self.raster = cams.interp(longitude=np.linspace(lonmin, lonmax, 12),
-                                  latitude=np.linspace(latmax, latmin, 12),
-                                  kwargs={"fill_value": "extrapolate"})
-        self.raster = self.raster.rename({'longitude': 'x', 'latitude': 'y'})
+        self.raster = cams.interp(
+            longitude=np.linspace(lonmin, lonmax, 12),
+            latitude=np.linspace(latmax, latmin, 12),
+            kwargs={"fill_value": "extrapolate"},
+        )
+        self.raster = self.raster.rename({"longitude": "x", "latitude": "y"})
         Nx = len(self.raster.x)
         Ny = len(self.raster.y)
         x = np.linspace(xmin, xmax, Nx)
         y = np.linspace(ymax, ymin, Ny)
-        self.raster['x'] = x
-        self.raster['y'] = y
+        self.raster["x"] = x
+        self.raster["y"] = y
 
         self.raster.rio.write_crs(self.prod.rio.crs, inplace=True)
 
         param_aod = []
         for wl in self.wls:
             wl_ = str(wl)
-            param_aod.append('aod' + wl_)
+            param_aod.append("aod" + wl_)
 
-        cams_aod = self.raster[param_aod].to_array(dim='wl')
+        cams_aod = self.raster[param_aod].to_array(dim="wl")
 
-        wl_cams = cams_aod.wl.str.replace('aod', '').astype(float)
+        wl_cams = cams_aod.wl.str.replace("aod", "").astype(float)
         self.cams_aod = cams_aod.assign_coords(wl=wl_cams)
 
         self.variables = list(cams.keys())
@@ -254,21 +266,38 @@ class CamsProduct:
 
         return
 
-    def plot_params(self, params=['amaod550', 'bcaod550', 'duaod550', 'niaod550',
-                                  'omaod550', 'ssaod550', 'suaod550',
-                                  'aod550',
-                                  't2m', 'msl', 'sp',
-                                  'tcco', 'tc_ch4', 'tcno2', 'gtco3',
-                                  'tcwv', 'u10', 'v10'],
-                    **kwargs):
-        '''
+    def plot_params(
+        self,
+        params=[
+            "amaod550",
+            "bcaod550",
+            "duaod550",
+            "niaod550",
+            "omaod550",
+            "ssaod550",
+            "suaod550",
+            "aod550",
+            "t2m",
+            "msl",
+            "sp",
+            "tcco",
+            "tc_ch4",
+            "tcno2",
+            "gtco3",
+            "tcwv",
+            "u10",
+            "v10",
+        ],
+        **kwargs,
+    ):
+        """
         Function to plot the cams data extracted for date and region of interest.
         Note that secondary organic aerosols optical thickness at 550 nm is not available for the whole timeserires (check parameter 'soaod550')
 
         :param params: parameters to plot
         :param kwargs: kwargs for matplotlib plotting
         :return: fig, axs
-        '''
+        """
 
         Nrows = (len(params) + 4) // 4
         fig, axs = plt.subplots(Nrows, 4, figsize=(4 * 4.2, Nrows * 3.5))
@@ -279,7 +308,7 @@ class CamsProduct:
             fig.axes.set_title(param)
             fig.colorbar.set_label(self.raster[param].units)
             fig.axes.set(xticks=[], yticks=[])
-            fig.axes.set_ylabel('')
-            fig.axes.set_xlabel('')
+            fig.axes.set_ylabel("")
+            fig.axes.set_xlabel("")
         plt.tight_layout()
         return fig, axs
